@@ -1,0 +1,131 @@
+ var result = await (from a in _dbContext.UserRequest
+                     join b in _dbContext.Title
+                       on a.TitleId equals b.TitleId into c
+                     from d in c
+                     join e in _dbContext.UserRequestType
+                       on a.UserRequestTypeId equals e.Id into f
+                     from g in f
+                     join h in _dbContext.UserRequestStatus
+                     on a.UserRequestStatusId equals h.Id into i
+                     from j in i
+                     orderby a.CreatedOn descending
+                     select new UserRequestDetails
+                     {
+                         Id = _encodeDecodeService.EncodeToString(a.Id),
+                         FirstName = a.FirstName,
+                         LastName = a.LastName,
+                         EmailId = a.EmailId,
+                         Comment = a.Comment,
+                         CreatedOn = a.CreatedOn,
+                         UserRequestStatusName = j.Name,
+                         UserRequestTypeName = g.Name,
+                         TitleName = d.TitleDescription,
+                         TitleId = _encodeDecodeService.EncodeToString(a.TitleId)
+                     }).ToListAsync().ConfigureAwait(false);
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 
+					 USER REQUEST ENTITY :
+					 
+					 
+    public class UserRequest
+    {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int Id { get; set; }
+        public int UserRequestTypeId { get; set; }
+        public int TitleId { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string EmailId { get; set; }
+        public string Comment { get; set; }
+        public DateTime CreatedOn { get; set; }
+        public int? UpdatedBy { get; set; }
+        public DateTime UpdatedOn { get; set; }
+        public int UserRequestStatusId {  get; set; }
+        public UserRequestType UserRequestType { get; set; }  
+        public UserRequestStatus UserRequestStatus { get; set; }
+        public Title Title { get; set; }
+    }
+
+
+
+
+TITLE ENTITY :
+
+    public class Title
+    {
+        public int TitleId { get; set; }
+        public string TitleDescription { get; set; }
+        public ICollection<UserEntity> UserEntity { get; } 
+        public ICollection<UserRequest> UserRequest { get; }
+    }
+	
+	
+	
+	
+	
+	
+	UserRequestType eNTITY:
+	
+
+    public class UserRequestType
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public ICollection<UserRequest> UserRequest { get; }
+    }
+
+
+USERREQUEST STATUS :
+
+    public class UserRequestStatus
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public ICollection<UserRequest> UserRequest { get; }
+    }
+	
+	
+	
+	
+	
+	
+	UserRequestDetails Class
+	
+	
+	 public class UserRequestDetails
+
+ {
+     public string Id { get; set; }
+     public string TitleId { get; set; }
+     public string FirstName { get; set; }
+     public string LastName { get; set; }
+     public string EmailId { get; set; }
+     public string Comment { get; set; }
+     public int UserRequestStatusId { get; set; }
+     public DateTime CreatedOn { get; set; }
+     public string UserRequestStatusName { get; set; }
+     public string UserRequestTypeName { get; set; }
+     public string TitleName { get; set; }
+     public int UpdatedBy { get; set; }
+     public string Code { get; set; }
+ }
+	
+	
+	
