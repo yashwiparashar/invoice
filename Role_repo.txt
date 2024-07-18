@@ -1,0 +1,233 @@
+using IkpReporting.Abstractions.Constant;
+using IkpReporting.Abstractions.Extensions;
+using IkpReporting.Abstractions.Interfaces;
+using IkpReporting.Abstractions.Model.Models;
+using IkpReporting.Abstractions.Model.Role;
+using IkpReporting.Abstractions.Model.User;
+using IkpReporting.Domain.Interfaces.Repositories;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace IkpReporting.Application.Services
+{
+    public class ReportRoleService : IReportRoleService
+    {
+        private readonly IReportRoleRepository _reportRoleRepository;
+        private readonly IConfiguration _configuration;
+
+        public ReportRoleService(IReportRoleRepository reportRoleRepository, IConfiguration configuration)
+        {
+            _reportRoleRepository = reportRoleRepository;
+            _configuration = configuration;
+        }
+
+        public async Task<ReturnValue<IEnumerable<RolesForUserDto>>> GetRolesForUserAsync(UserContextDto userContextDto, CancellationToken cancellationToken)
+        {
+            var result = await _reportRoleRepository.GetRolesForUserAsync(userContextDto).ConfigureAwait(false);
+            return result;
+        }
+        public async Task<ReturnValue<ResultRoleList>> GetRolesAsync(UserContextDto userContextDto, CancellationToken cancellationToken)
+        {
+            ResultRoleList result;
+            if (userContextDto != null && userContextDto.ProfileName == ProfileNameConstants.PartnerAdmin)
+            {
+                var rolesList = await _dbContext.Role.Join(_dbContext.Scopes,
+                          rd => rd.Id,
+                          sc => Convert.ToInt32(sc.RoleId),
+                          (rd, sc) => new { rd, sc })
+                    .Where(a => a.sc.UserId == userContextDto.UserId)
+                     .Select(a => new Role
+                     {
+                         Id = a.rd.Id,
+                         RoleName = a.rd.RoleName,
+                         RoleDescription = a.rd.RoleDescription
+                     })
+                    .ToListAsync().ConfigureAwait(false);
+
+
+                var roles = _mapper.Map<List<RoleListDto>>(rolesList);
+
+                var partnerrolesList = _dbContext.Role
+                       .Where(a => a.RoleDetails.CreatedBy == userContextDto.UserId.ToString(CultureInfo.InvariantCulture));
+
+                var partnerroles = _mapper.Map<List<RoleListDto>>(partnerrolesList);
+                var combinedRoles = roles.Union(partnerroles);
+                result = new ResultRoleList
+                {
+                    Roles = _mapper.Map<IEnumerable<RoleListDto>>(combinedRoles),
+                    IsSuccess = true
+                };
+
+            }
+            else
+            {
+                var roles = await _dbContext.Role.Where(a => a.RoleDetails.IsDisplay).ToListAsync().ConfigureAwait(false);
+                result = new ResultRoleList
+                {
+                    Roles = _mapper.Map<IEnumerable<RoleListDto>>(roles),
+                    IsSuccess = true
+                };
+
+            }
+            if (result.IsSuccess)
+            {
+                return ReturnValue<ResultRoleList>.Success(result);
+            }
+            return ReturnValue<ResultRoleList>.Failure(_configuration[IkpConstant.NoRoles]);
+
+
+
+
+
+
+
+            var result = await _reportRoleRepository.GetRolesAsync(userContextDto).ConfigureAwait(false);
+            return result;
+        }
+
+        public async Task<ReturnValue<ResultRoleDetail>> GetRolebyIdAsync(string roleId, CancellationToken cancellationToken)
+        {
+            var result = await _reportRoleRepository.GetRolebyIdAsync(roleId).ConfigureAwait(false);
+            return result;
+        }
+
+        public async Task<ReturnValue<bool>> IsRoleExistsByNameAndIdAsync(string roleName, string roleId, CancellationToken cancellationToken)
+        {
+            var result = await _reportRoleRepository.IsRoleExistsByNameAndIdAsync(roleName, roleId).ConfigureAwait(false);
+            return result;
+        }
+        public async Task<ReturnValue<bool>> IsRoleExistsByNameAsync(string roleName, CancellationToken cancellationToken)
+        {
+
+            var result = await _reportRoleRepository.IsRoleExistsByNameAsync(roleName).ConfigureAwait(false);
+            return result;
+        }
+        public async Task<ReturnValue<bool>> CreateRoleAsync(RoleContextDto roleDetail, CancellationToken cancellationToken)
+        {
+            if (roleDetail == null)
+            {
+                return ReturnValue<bool>.Failure(_configuration["ErrorConstants:RoleDetailRequired"]);
+            }
+            var IsRoleExist = await IsRoleExistsByNameAsync(roleDetail.RoleName, cancellationToken).ConfigureAwait(false);
+            if (IsRoleExist.Value)
+            {
+                return ReturnValue<bool>.Failure(_configuration["ErrorConstants:RoleExists"]);
+            }
+            var result = await _reportRoleRepository.CreateOrUpdateRoleAsync(roleDetail).ConfigureAwait(false);
+
+            return result;
+        }
+
+        public async Task<ReturnValue<bool>> UpdateRoleAsync(RoleContextDto roleDetail, CancellationToken cancellationToken)
+        {
+            if (roleDetail == null)
+            {
+                return ReturnValue<bool>.Failure(_configuration["ErrorConstants:RoleDetailRequired"]);
+            }
+            var IsRoleExist = await _reportRoleRepository.GetRolebyIdAsync(roleDetail.RoleId)
+                               .BindAsync(existingRole => IsRoleExistsByNameAndIdAsync(roleDetail.RoleName, roleDetail.RoleId, cancellationToken)).ConfigureAwait(false);
+            if (!IsRoleExist.Value)
+            {
+                var result = await _reportRoleRepository.CreateOrUpdateRoleAsync(roleDetail).ConfigureAwait(false);
+                return result;
+            }
+            return ReturnValue<bool>.Failure(_configuration["ErrorConstants:RoleNotSaved"]);
+
+        }
+
+        public async Task<ReturnValue<bool>> DeleteRoleAsync(string roleId, CancellationToken cancellationToken)
+        {
+
+            var IsRoleExistsInScope = await _reportRoleRepository.IsRoleExistInScopeAsync(roleId).ConfigureAwait(false);
+            if (IsRoleExistsInScope.IsSuccess)
+            {
+                return ReturnValue<bool>.Failure(_configuration["ErrorConstants:deleteRoleError"]);
+            }
+            var result = await _reportRoleRepository.DeleteRoleAsync(roleId).ConfigureAwait(false);
+            return result;
+        }
+
+    }
+}
+
+
+
+
+
+
+Scope Entity - 
+
+
+using System.ComponentModel.DataAnnotations;
+
+namespace IkpReporting.Domain.Entities
+
+{
+    public class ScopeEntity
+    {
+        [Key]
+        public int Id { get; set; }
+        public int UserId { get; set; }
+        public int? AdminUserId { get; set; }
+        public int ProfileId { get; set; }
+        public int RoleId { get; set; }   
+        public int? TerritoryId { get; set; } 
+        public int? SubsidiaryId { get; set; }
+        public int? TerritoryIdBoth { get; set; }  
+        public int? SubsidiaryIdBoth { get; set; }
+        public int CustomerLegalTypeId { get; set; }
+        public bool? DisplayType { get; set; }
+        public int SalesTypeHoldingId { get; set; }
+        public string PartnerTypeHoldingId { get; set; }
+        public string PartnerGroupHoldingId { get; set; }
+        public string PartnerNameHoldingId { get; set; }
+        public string PartnerMakeId { get; set; }
+        public bool BudgetReport { get; set; }
+        public int Procurement { get; set; }
+        public UserEntity User { get; set; }
+        public Profile Profile { get; set; }
+        public Role Role { get; set; }
+        public CustomerLegalType CustomerLegalType { get; set; }
+        public SalesTypeHolding SalesType { get; set; }
+        public Territory Territory { get; set; }
+        public Country Subsidary { get; set; }
+        public Territory TerritoryBoth { get; set; }
+        public Country SubsidaryBoth { get; set; }
+    }
+}
+
+
+
+
+
+
+namespace IkpReporting.Domain.Entities
+{
+    public class Role
+    {
+        public int Id { get; set; }
+        public string RoleName { get; set; }
+        public string RoleDescription { get; set; }
+        public RoleDetails RoleDetails { get; set; }
+        public ICollection<ScopeEntity> Scopes { get; }
+
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
