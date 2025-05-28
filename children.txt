@@ -1,0 +1,661 @@
+app-routingmodule.ts
+
+
+/*
+*This module contains routing infromations.
+*/
+import {  NgModule } from '@angular/core';
+import { Routes, RouterModule } from '@angular/router';
+import { authGuard } from './guard/auth.guard';
+import { adminGuard } from './guard/admin.guard';
+import { AuthLayoutComponent } from './layout/auth-layout/auth-layout.component';
+import { ContentLayoutComponent } from './layout/content-layout/content-layout.component';
+import { resetpasswordGuard } from './guard/resetpassword.guard';
+import { disclaimerGuard } from './guard/disclaimer.guard';
+import { deactivateGuard } from './guard/deactivate.guard';
+import { runGuardsInOrder } from './run-guards-in-order';
+
+
+const appRoutes: Routes = [
+  {
+    path: '',
+    redirectTo: 'auth',
+    pathMatch: 'full'
+  },
+  {
+    path: 'auth',
+    component: AuthLayoutComponent,
+    loadChildren: () => import('./modules/auth/auth.module').then(m => m.AuthModule)
+  },
+  {
+    path: 'report',
+    component: ContentLayoutComponent,
+    loadChildren: () => import('./modules/report/report.module').then(m => m.ReportModule), canActivate: [ runGuardsInOrder(authGuard, disclaimerGuard, deactivateGuard, resetpasswordGuard) ]
+  },
+  {
+    path: 'user',
+    component: ContentLayoutComponent,
+    loadChildren: () => import('./modules/user/user.module').then(m => m.UserModule), canActivate: [ runGuardsInOrder(adminGuard, disclaimerGuard, deactivateGuard, resetpasswordGuard) ]
+  },
+  {
+    path: 'hub',
+    component: ContentLayoutComponent,
+    loadChildren: () => import('./modules/hub/hub.module').then(m => m.HubModule), canActivate: [ runGuardsInOrder(adminGuard, disclaimerGuard, deactivateGuard, resetpasswordGuard) ]
+  },
+  {
+    path: 'role',
+    component: ContentLayoutComponent,
+    loadChildren: () => import('./modules/role/role.module').then(m => m.RoleModule), canActivate: [ runGuardsInOrder(adminGuard, disclaimerGuard, deactivateGuard, resetpasswordGuard) ]
+  },
+  {
+    path: 'dashboard',
+    component: ContentLayoutComponent,
+    loadChildren: () => import('./modules/dashboard/dashboard.module').then(m => m.DashboardModule), canActivate: [ runGuardsInOrder(authGuard, disclaimerGuard, deactivateGuard, resetpasswordGuard) ]
+  },
+  {
+    path: 'accessrequest',
+    loadChildren: () => import('./modules/access-request/accessrequest.module').then(m => m.AccessrequestModule)
+  },
+  {
+    path: '**', redirectTo: 'auth', canActivate: [authGuard ]
+  }
+];
+
+@NgModule({
+  imports: [RouterModule.forRoot(appRoutes, { useHash: false })],
+  exports: [RouterModule]
+})
+export class AppRoutingModule { }
+
+
+
+
+
+
+countrynode.module.ts
+
+/**
+ * INestedNode model
+ */
+export interface INestedNode {
+    name: string;
+    children?: INestedNode[];
+    selected?: boolean;
+    indeterminate?: boolean;
+    parent?: INestedNode;
+  }
+
+
+
+
+
+
+
+
+accessrequest-routing.module.ts
+
+/**
+ * AccessrequestRouting Module
+ */
+import { NgModule } from '@angular/core';
+import { AuthLayoutComponent } from 'src/app/layout/auth-layout/auth-layout.component';
+import { RouterModule, Routes } from '@angular/router';
+import { UserRequestComponent } from './user-request/user-request.component';
+import { ContentLayoutComponent } from 'src/app/layout/content-layout/content-layout.component';
+import { RequestListComponent } from './request-list/request-list.component';
+import { adminGuard } from 'src/app/guard/admin.guard';
+
+const accessRequestRoutes: Routes = [
+  {
+    path: 'create',
+    component: AuthLayoutComponent,
+    children: [
+      {
+        path: '',
+        component: UserRequestComponent,
+      },
+    ],
+  },
+  {
+    path: 'list',
+    component: ContentLayoutComponent,
+    canActivate: [adminGuard],
+    children: [
+      {
+        path: '',
+        component: RequestListComponent,
+      },
+    ],
+  },
+];
+
+@NgModule({
+  imports: [RouterModule.forChild(accessRequestRoutes)],
+  exports: [RouterModule]
+})
+export class AccessrequestRoutingModule { }
+
+
+
+
+
+reportfilter.component.ts
+
+
+/**
+ * report filter component
+ */
+import { Component, ViewChild, OnInit, ViewChildren, QueryList } from "@angular/core";
+import { FormGroup } from "@angular/forms";
+import { ToastrService } from "ngx-toastr";
+import { IReportFilterConfiguration, IFilterConfiguration, IReportTable } from "src/app/model/report.model";
+import { IUserScopeDetail } from "src/app/model/user.model";
+import { ReportService } from "src/app/service/report.service";
+import { UserService } from "src/app/service/user.service";
+import { IPartnerMake } from "src/app/model/partnermake.model";
+import { IMasterFilterData } from "src/app/model/filterdata.model";
+import { ReportComponent } from "../report/report.component";
+import { IPartnerModel } from "src/app/model/partnermodel.model";
+import { CheckboxComponent } from 'src/app/shared/components/checkbox/checkbox.component';
+import { NesteddropdownComponent } from 'src/app/shared/components/nesteddropdown/nesteddropdown.component';
+import { DropdownComponent } from 'src/app/shared/components/dropdown/dropdown.component';
+
+@Component({
+  selector: "app-reportfilter",
+  templateUrl: "./reportfilter.component.html",
+  styleUrls: ["./reportfilter.component.scss"],
+  standalone :false
+})
+export class ReportfilterComponent implements OnInit {
+  @ViewChildren(CheckboxComponent)
+  checkboxComponentValues: QueryList<CheckboxComponent>;
+  @ViewChild(NesteddropdownComponent)
+  nesteddropdownComponent: NesteddropdownComponent;
+  @ViewChildren(DropdownComponent)
+  dropdownComponentValues: QueryList<DropdownComponent>;
+  @ViewChild(ReportComponent) reportComponent: ReportComponent;
+  filterFormGroup: FormGroup;
+  isSelected = true;
+  isFilterDirty = false;
+  filtervals = {} as IUserScopeDetail;
+  masterFilterData = {} as IMasterFilterData;
+  selectedScopeDetails = {} as IUserScopeDetail;
+  reportTable = {} as IReportTable;
+  config: IFilterConfiguration = {
+    Report: this.reportTable,
+    BindingColumn: "",
+  };
+
+  filterconfig: IReportFilterConfiguration = {
+    SalesType: this.config,
+    CustomerLegalType: this.config,
+    Country: this.config,
+    PartnerType: this.config,
+    PartnerGroup: this.config,
+    PartnerName: this.config,
+    PartnerMake: this.config,
+    PartnerModel: this.config,
+    ContractType: this.config,
+    VehicleBodyType: this.config,
+    FuelType: this.config
+  };
+
+  constructor(
+    private readonly userService: UserService,
+    private readonly _toastr: ToastrService,
+    private readonly reportService: ReportService
+  ) { }
+
+  ngOnInit() {
+    this.reportService.getFilterDisplayFlag().subscribe(isSelected => {
+      this.isSelected = isSelected;
+    });
+    this.reportService.getToggleFilter().subscribe(isFilterDirty => {
+      this.isFilterDirty = isFilterDirty;
+    });
+    this.userService.getUserScopeDetails().subscribe(responseData => {
+      if (responseData.IsSuccess) {
+        this.filtervals = responseData.Value;
+        this.groupPartnerMake();
+        this.groupPartnerModel();
+        this.selectedScopeDetails = { ...this.filtervals };
+      } else {
+        this._toastr.error(responseData.ErrorMessage);
+      }
+    });
+
+    this.reportService.getFilterConfigurations().subscribe(responseData => {
+      if (responseData.IsSuccess) {
+        this.filterconfig = responseData.Value;
+        this.reportService.setLoadedFilters(true);
+      } else {
+        this._toastr.error(responseData.ErrorMessage);
+      }
+    });
+  }
+
+  groupPartnerMake() {
+    const result: { [key: string]: IPartnerMake } =
+      this.filtervals.PartnerMake.reduce((acc, obj) => {
+        const MakeNameValue = obj["MakeName"];
+        if (!acc[MakeNameValue]) {
+          const partnerMakeObj: IPartnerMake = {
+            MakeName: MakeNameValue,
+            MakeId: obj["MakeId"],
+            PartnerName: obj["PartnerName"],
+            ParentPartnerName: [],
+          };
+          acc[MakeNameValue] = partnerMakeObj;
+        }
+        acc[MakeNameValue].ParentPartnerName.push(obj["PartnerName"]);
+        return acc;
+      }, {});
+    this.filtervals.PartnerMake = Object.values(result);
+  }
+
+  groupPartnerModel() {
+    const result: { [key: string]: IPartnerModel } =
+      this.filtervals.PartnerModel.reduce((acc, obj) => {
+        const ModelNameValue = obj["ModelName"];
+        if (!acc[ModelNameValue]) {
+          const partnerModelObj: IPartnerModel = {
+            ModelName: ModelNameValue,
+            Id: obj["Id"],
+            MakeName: obj["MakeName"],
+            ParentPartnerMake: [],
+          };
+          acc[ModelNameValue] = partnerModelObj;
+        }
+        acc[ModelNameValue].ParentPartnerMake.push(obj["MakeName"]);
+        return acc;
+      }, {});
+    this.filtervals.PartnerModel = Object.values(result);
+  }
+
+  callParentChild(eventData: { name: string; value: string[] }) {
+    if (eventData.name === 'Partner Type') {
+      this.getPartnerGroup(eventData.value);
+    }
+    if (eventData.name === "Partner Group") {
+      this.getPartnerName(eventData.value);
+    }
+    if (eventData.name === "Partner Name") {
+      this.getPartnerMake(eventData.value);
+    }
+    if (eventData.name === "Make") {
+      this.getPartnerModel(eventData.value);
+    }
+  }
+  getPartnerGroup(values) {
+    if (values.length > 0) {
+      this.selectedScopeDetails.PartnerGroup =
+        this.filtervals.PartnerGroup.filter(x =>
+          values.includes(x.PartnerTypeName)
+        );
+      const filteredGroup = this.selectedScopeDetails.PartnerGroup.map(
+        x => x.PartnerGroupHoldingName
+      );
+      this.getPartnerName(filteredGroup);
+    } else {
+      this.selectedScopeDetails.PartnerGroup = this.filtervals.PartnerGroup;
+    }
+  }
+
+  getPartnerName(values) {
+    if (values.length > 0) {
+      this.selectedScopeDetails.PartnerName =
+        this.filtervals.PartnerName.filter(x =>
+          values.includes(x.PartnerGroupHoldingName)
+        );
+      const filteredName = this.selectedScopeDetails.PartnerName.map(
+        x => x.PartnerNameHoldingName
+      );
+      this.getPartnerMake(filteredName);
+    } else {
+      this.selectedScopeDetails.PartnerName = this.filtervals.PartnerName;
+    }
+  }
+
+  getPartnerMake(values) {
+    if (values.length > 0) {
+      this.selectedScopeDetails.PartnerMake =
+        this.filtervals.PartnerMake.filter(x =>
+          values.some(y => x.ParentPartnerName.includes(y))
+        );
+      const filteredMake = this.selectedScopeDetails.PartnerMake.map(
+        x => x.MakeName
+      );
+      this.getPartnerModel(filteredMake);
+    } else {
+      this.selectedScopeDetails.PartnerMake = this.filtervals.PartnerMake;
+    }
+  }
+
+  getPartnerModel(values) {
+    if (values.length > 0) {
+      this.selectedScopeDetails.PartnerModel =
+        this.filtervals.PartnerModel.filter(x =>
+          values.some(y => x.ParentPartnerMake.includes(y))
+        );
+    } else {
+      this.selectedScopeDetails.PartnerModel = this.filtervals.PartnerModel;
+    }
+  }
+
+  resetFilter() {
+    this.reportService.setResetApplied(true);
+    this.dropdownComponentValues.forEach(child => {
+      child.getDefaultValues();
+    });
+    this.nesteddropdownComponent.resetValues();
+    this.masterFilterData.FilterData = []
+    this.reportService.setFilterValue(this.masterFilterData);
+    this.reportService.setResetApplied(false);
+    this.isFilterDirty = false;
+  }
+
+  applyFilter() {
+    this.masterFilterData.FilterData = [];
+    this.dropdownComponentValues.forEach(child => {
+      this.masterFilterData.FilterData.push(child.getSelectedValues());
+    });
+
+    this.masterFilterData.FilterData.push(
+      this.nesteddropdownComponent.getSelectedValue()
+    );
+    this.reportService.setFilterValue(this.masterFilterData);
+    this.reportService.setToggleFilter(false);
+  }
+}
+
+
+nesteddropdown.component.ts
+
+
+/**
+ * nested dropdown component
+ */
+import { NestedTreeControl } from "@angular/cdk/tree";
+import { Component, Input, OnDestroy, ViewChild } from "@angular/core";
+import { MatTreeNestedDataSource } from "@angular/material/tree";
+import { models } from "powerbi-client";
+import { INestedNode } from "src/app/model/countrynode.model";
+import { IFilterData } from "src/app/model/filterdata.model";
+import { MatCheckbox } from "@angular/material/checkbox";
+import { ReportService } from "src/app/service/report.service";
+import { Subject, Subscription } from 'rxjs';
+
+@Component({
+  selector: "app-nesteddropdown",
+  templateUrl: "./nesteddropdown.component.html",
+  styleUrl: "./nesteddropdown.component.scss",
+  standalone :false
+})
+export class NesteddropdownComponent implements OnDestroy {
+  @Input() fieldName: string;
+  @Input() tableName: string;
+  @Input() columnName: string;
+  private _filterObject: unknown[];
+  @Input() operator: string;
+  @Input() displayNameRoot: string;
+  @Input() displayNameNode: string;
+  @ViewChild("toggleAll") toggleAll: MatCheckbox;
+  totalValuesLength: number;
+  filterData = {} as IFilterData;
+  treeData: INestedNode[];
+  displayFieldValue: string;
+  selectedListValues: string[];
+  isShowList = false;
+  isAllVisible = true;
+  orderByProperty = "name";
+  toggleContent = "dropdown-content-hide";
+  documentClickSubscription: Subscription | undefined;
+  private readonly onDestroy$ = new Subject<void>();
+  public treeControl = new NestedTreeControl<INestedNode>(node => node.children);
+  public dataSource = new MatTreeNestedDataSource<INestedNode>();
+  public selectedDataSource = new MatTreeNestedDataSource<INestedNode>();
+  public hasChild = (_: number, node: INestedNode) =>
+    !!node.children && node.children.length > 0;
+  searchInputValue = '';
+  constructor(private readonly reportService: ReportService) {
+    this.selectedListValues = [];
+    this.displayFieldValue = "All";
+  }
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+  }
+
+  @Input()
+  set filterObject(values: unknown[]) {
+    this._filterObject = values;
+    if (this._filterObject) {
+      this.groupCountries();
+    }
+  }
+
+  get filterObject(): unknown[] {
+    return this._filterObject;
+  }
+
+  showList() {
+    this.isShowList = !this.isShowList;
+    if (this.isShowList) {
+      this.openList();
+    } else {
+      this.closeList();
+    }
+  }
+  closeList() {
+    this.toggleContent = "dropdown-content-hide";
+  }
+  openList() {
+    this.toggleContent = "dropdown-content-show";
+  }
+  toggleSelectAll() {
+    if (this.toggleAll.checked) {
+      this.setAllNodesSelected(this.treeData);
+      this.selectedDataSource.data = structuredClone(this.treeData);
+      this.storeSelectedValue();
+    } else {
+      this.setAllNodesDeselected(this.treeData);
+      this.selectedDataSource.data = structuredClone(this.treeData);
+      this.storeSelectedValue();
+    }
+    this.reportService.setToggleFilter(true);
+  }
+
+  setParent(node: INestedNode, parent: INestedNode) {
+    node.parent = parent;
+    if (node.children) {
+      node.children.forEach(childNode => {
+        this.setParent(childNode, node);
+      });
+    }
+  }
+
+  checkAllParents(node: INestedNode) {
+    if (node.parent) {
+      const descendants = this.treeControl.getDescendants(node.parent);
+      node.parent.selected = descendants.every(child => child.selected);
+      node.parent.indeterminate = descendants.some(child => child.selected);
+      this.checkAllParents(node.parent);
+    }
+  }
+  groupCountries() {
+    const list = this.filterObject;
+    const nodeData = list.reduce((acc, obj) => {
+      const name = obj[this.displayNameRoot];
+      if (!acc[name]) {
+        acc[name] = { name, children: [] };
+      }
+      if (obj[this.displayNameNode] !== obj[this.displayNameRoot]) {
+        acc[name].children.push({
+          name: obj[this.displayNameNode],
+        });
+      }
+      return acc;
+    }, {});
+    this.treeData = Object.values(nodeData);
+    this.treeData = this.sortTree(this.treeData);
+    Object.keys(this.treeData).forEach(key => {
+      this.setParent(this.treeData[key], null);
+    });
+    this.setAllNodesDeselected(this.treeData);
+    this.dataSource.data = this.treeData;
+    this.selectedDataSource.data = structuredClone(this.treeData);
+    this.totalValuesLength = this.getNodesCount();
+    this.storeSelectedValue();
+  }
+
+  getNodesCount() {
+    const result = this.selectedDataSource.data.reduce(
+      (acc: INestedNode[], node: INestedNode) =>
+        acc.concat(
+          this.treeControl
+            .getDescendants(node)
+            .filter(descendant => !descendant.selected)
+        ),
+      [] as INestedNode[]
+    );
+    const names = result.map(x => x.name);
+    return names.length;
+  }
+  sortTree(nodes: INestedNode[]): INestedNode[] {
+    return nodes
+      .map(node => {
+        if (node.children) {
+          node.children = this.sortTree(node.children);
+        }
+        return node;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+  setAllNodesSelected(nodes: INestedNode[]): void {
+    nodes.forEach(node => {
+      node.selected = true;
+      node.indeterminate = true;
+      if (node.children) {
+        this.setAllNodesSelected(node.children);
+      }
+    });
+  }
+  setAllNodesDeselected(nodes: INestedNode[]): void {
+    nodes.forEach(node => {
+      node.selected = false;
+      node.indeterminate = false;
+      if (node.children) {
+        this.setAllNodesDeselected(node.children);
+      }
+    });
+  }
+  valueToggle(checked: boolean, node: INestedNode) {
+    this.itemToggle(checked, node);
+    this.storeSelectedValue();
+    this.checkAll();
+    this.reportService.setToggleFilter(true);
+  }
+  resetValues() {
+    if (this.toggleAll) {
+      this.toggleAll.checked = false;
+    }
+    this.setAllNodesDeselected(this.treeData);
+    this.resetSelection();
+    this.storeSelectedValue();
+    this.searchInputValue = '';
+    this.filterOptions(this.searchInputValue);
+  }
+  resetSelection() {
+    this.selectedDataSource.data.forEach(node =>
+      this.resetNodeSelection(node)
+    );
+  }
+
+  resetNodeSelection(node: INestedNode) {
+    node.selected = false;
+    node.indeterminate = false;
+    if (node.children) {
+      node.children.forEach(child => this.resetNodeSelection(child));
+    }
+  }
+  storeSelectedValue() {
+    const result = this.selectedDataSource.data.reduce(
+      (acc: INestedNode[], node: INestedNode) =>
+        acc.concat(
+          this.treeControl
+            .getDescendants(node)
+            .filter(descendant => descendant.selected)
+        ),
+      [] as INestedNode[]
+    );
+    this.selectedListValues = result.map(x => x.name);
+    if (this.selectedListValues.length === 1) {
+      this.displayFieldValue = this.selectedListValues[0];
+    } else if (
+      this.selectedListValues.length > 1 &&
+      this.selectedListValues.length < this.totalValuesLength
+    ) {
+      this.displayFieldValue = "Multiple Selections";
+    } else if (this.selectedListValues.length === this.totalValuesLength) {
+      this.displayFieldValue = "All";
+    } else {
+      this.displayFieldValue = "All";
+    }
+    this.getSelectedValue();
+  }
+  getSelectedValue() {
+    this.filterData = {
+      Table: this.tableName,
+      Column: this.columnName,
+      Operator: this.operator as models.BasicFilterOperators,
+      SelectedValues: this.selectedListValues,
+    };
+    return this.filterData;
+  }
+
+  itemToggle(checked: boolean, node: INestedNode) {
+    node.selected = checked;
+    node.indeterminate = checked;
+    if (node.children) {
+      node.children.forEach(child => {
+        this.itemToggle(checked, child);
+      });
+    }
+    this.checkAllParents(node);
+  }
+  checkAll() {
+    if (this.toggleAll) {
+      if (this.selectedListValues.length === this.totalValuesLength) {
+        this.toggleAll.checked = true;
+      } else {
+        this.toggleAll.checked = false;
+      }
+    }
+  }
+  filterOptions(searchValue: string) {
+    const filterValue = searchValue.toLowerCase();
+    if (!filterValue) {
+      this.selectedDataSource.data = this.treeData;
+    }
+    this.selectedDataSource.data = this.treeData
+      .map(node => this.filterNode(node, filterValue))
+      .filter(Boolean);
+    if (this.selectedDataSource.data.length === this.treeData.length) {
+      this.isAllVisible = true;
+    } else {
+      this.isAllVisible = false;
+    }
+  }
+
+  filterNode(node: INestedNode, filterValue: string): INestedNode | null {
+    const children = node.children
+      ?.map(child => this.filterNode(child, filterValue))
+      .filter(Boolean);
+    const isVisible =
+      node.name.toLowerCase().includes(filterValue) ||
+      (children && children.length > 0);
+    if (isVisible) {
+      return { ...node };
+    }
+    return null;
+  }
+}
