@@ -1,33 +1,82 @@
-
-
-
-
-private void SendMailForCroatia(string filePath, JatoExecutor.Configuration config, string emailList)
+private void SendMailForCountries(
+    JatoExecutor.Configuration config)
 {
     try
     {
-        string subject = CountryCode + " - " + CountryName;
+        string[] countries = { "HR", "SI" };
 
-        EmailEntities entities = new EmailEntities
+        foreach (string countryCode in countries)
         {
-            ToAddress = emailList,
-            FromAddress = config.GetParamValue(BATCH_FROMADDRESS),
-            SmtpHost = config.GetParamValue(BATCH_SMTPSEVER),
-            Subject = subject + " - " + GetAppSettingsValue(CurrentConstants.EMAILSUBJECT),
-            Body = GetAppSettingsValue(CurrentConstants.EMAILCONTENT),
-            Disclaimer = GetAppSettingsValue(CurrentConstants.EMAILDISCLAIMER),
-            DocumentPath = filePath
-        };
+            string emailList;
 
-        if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
-        {
-            Emailing.SendMail(entities);
+            if (countryCode == "HR")
+            {
+                emailList = "HR_EMAIL_1;HR_EMAIL_2;HR_EMAIL_3";
+            }
+            else
+            {
+                emailList = "SI_EMAIL_1;SI_EMAIL_2;SI_EMAIL_3";
+            }
 
-            UpdateLog(
-                ProcessStatus.Processing,
-                string.Empty,
-                "Vehicle export mail sent to Croatia recipients"
-            );
+            string folderPath = $@"{AppCodeConstants.TempPathAbsolute}\";
+
+            ExportArgs exportArgs = new ExportArgs
+            {
+                ExcelFileName =
+                    Utilities.GetUniqueFileName("VehicleExport") + ".xlsx",
+
+                ExportType = "ALL",
+
+                ModelYear = string.Empty,
+
+                VehStatus = "A",
+
+                WorkPath = folderPath,
+
+                TemplatePath = GetTemplatePath(countryCode)
+            };
+
+            int exportCount =
+                _importExportController.OnVehicleExportFile(exportArgs);
+
+            if (exportCount > 0)
+            {
+                string[] files = Directory.GetFiles(
+                    exportArgs.WorkPath,
+                    "*" + exportArgs.ExcelFileName);
+
+                if (files != null && files.Length > 0)
+                {
+                    foreach (string filePath in files)
+                    {
+                        string subject =
+                            countryCode + " - " +
+                            (countryCode == "HR" ? "Croatia" : "Slovenia");
+
+                        EmailEntities entities = new EmailEntities
+                        {
+                            ToAddress = emailList,
+                            FromAddress =
+                                config.GetParamValue(BATCH_FROMADDR),
+                            SmtpHost =
+                                config.GetParamValue(BATCH_SMTPSERVER),
+                            Subject =
+                                subject + " - " +
+                                GetAppSettingsValue(
+                                    RuntimeConstants.EMAILSUBJECT),
+                            Body =
+                                GetAppSettingsValue(
+                                    RuntimeConstants.EMAILCONTENT),
+                            Disclaimer =
+                                GetAppSettingsValue(
+                                    RuntimeConstants.EMAILDISCLAIMER),
+                            DocumentPath = filePath
+                        };
+
+                        Emailing.SendMail(entities);
+                    }
+                }
+            }
         }
     }
     catch (Exception ex)
@@ -35,7 +84,6 @@ private void SendMailForCroatia(string filePath, JatoExecutor.Configuration conf
         UpdateLog(
             ProcessStatus.Processing,
             string.Empty,
-            "Failed while sending vehicle export mail to Croatia"
-        );
+            "Failed while sending vehicle export mail");
     }
 }
