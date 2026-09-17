@@ -1,3 +1,25 @@
+  private void SendEmail(string emailId, string filePath, string countryCode)
+        {
+            EmailEntities entities = new EmailEntities
+            {
+                ToAddress = emailId,
+
+                // These should come from the existing configuration
+                FromAddress = /* existing BATCH_FROMADDR */,
+                SmtpHost = /* existing BATCH_SMTPSERVER */,
+
+                Subject = countryCode + " - Vehicle Export",
+                Body = "Please find attached the Vehicle Export file.",
+                Disclaimer = "",
+                DocumentPath = filePath,
+                IsAttachmentAvailable = true
+            };
+
+            Emailing.SendMail(entities);
+        }
+
+
+
 {
     foreach (string country in new[] { "HR", "SI" })
     {
