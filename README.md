@@ -1,64 +1,15 @@
-  private void SendEmail(string emailId, string filePath, string countryCode)
-        {
-            EmailEntities entities = new EmailEntities
-            {
-                ToAddress = emailId,
+CREATE PROCEDURE dbo.P_GET_JTT_REPORT_MAILLIST
+AS
+BEGIN
+    DECLARE @mailinglist VARCHAR(500) = '';
 
-                // These should come from the existing configuration
-                FromAddress = /* existing BATCH_FROMADDR */,
-                SmtpHost = /* existing BATCH_SMTPSERVER */,
+    SELECT @mailinglist =
+        COALESCE(@mailinglist + ',', '') + jd.ParamValue1
+    FROM JTT
+    INNER JOIN JTTDETAIL jd
+        ON JTT.JttId = jd.JttId
+    WHERE JTT.JttCode = 'MAIL_REPORT_LIST'
+      AND jd.Active = 'Y';
 
-                Subject = countryCode + " - Vehicle Export",
-                Body = "Please find attached the Vehicle Export file.",
-                Disclaimer = "",
-                DocumentPath = filePath,
-                IsAttachmentAvailable = true
-            };
-
-            Emailing.SendMail(entities);
-        }
-
-
-
-{
-    foreach (string country in new[] { "HR", "SI" })
-    {
-        string filePath = GetCsvFilePath(country);
-
-        if (File.Exists(filePath))
-        {
-            string emailId = GetEmailId(country);
-
-            SendEmail(emailId, filePath);
-        }
-    }
-}
-
-
-
-private void SendEmail(string emailId, string filePath)
-{
-    // existing project's email logic here
-}
-
-
-private string GetCsvFilePath(string countryCode)
-{
-    string batchLogPath =
-        ConfigurationManager.AppSettings[BATCHLOGPATH].ToString();
-
-    string dateFolder = DateTime.Now.ToString("dd-MMM-yyyy");
-
-    return Path.Combine(
-        batchLogPath,
-        countryCode,
-        dateFolder,
-        "VehicleExport.csv");
-}
-
-
-
-private string GetEmailId(string countryCode)
-{
-    // Fetch from your config table
-}
+    SELECT @mailinglist AS EMAILLIST;
+END
