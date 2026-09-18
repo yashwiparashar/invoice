@@ -1,89 +1,182 @@
-using Ald.VehicleUpload.Common.BusinessEntities.JatoMaster;
+using Ald.VehicleUpload.Common.BusinessEntities.JobExecutor;
 using Ald.VehicleUpload.DataAccess.DAO.JobExecutorDataService;
-using Ald.VehicleUpload.DataAccess.Interface.ImportUtilitiesInterface;
-using Ald.VehicleUpload.DataAccess.Interface.JatoMasterInterface;
-using Ald.VehicleUpload.DataAccess.Interface.MCRVTableInterface;
 using Ald.VehicleUpload.Shared.Components;
-using Aspose.Cells;
 using Quartz;
 using Serilog;
 using System;
-using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
+
 using JatoExecutor = Ald.VehicleUpload.Common.BusinessEntities.JobExecutor;
 
 namespace Ald.VehicleUpload.Business.BO.JobExecutor
 {
     public class EmailSendProcess : IJob
     {
-        private readonly static ILogger _logger = Log.Logger.ForContext<EmailSendProcess>();
+        private readonly static ILogger _logger =
+            Log.Logger.ForContext<EmailSendProcess>();
+
         private const string BATCHLOGPATH = "BATCHLOGPATH";
-        private const string BATCH_FROMADDRES = "BATCH_FROMADDR";
-        private const string BATCH_SMTPSERVERES = "BATCH_SMTPSERVER";
-        private readonly IJttDetailCommon _iJttDetailCommon = null;
+        private const string BATCH_FROMADDR = "BATCH_FROMADDR";
+        private const string BATCH_SMTPSERVER = "BATCH_SMTPSERVER";
 
         public string CountryCode { get; set; } = string.Empty;
 
         public string CountryName { get; set; } = string.Empty;
 
+
         async Task IJob.Execute(IJobExecutionContext context)
         {
             try
             {
-                JobDataMap _dataMap = context.JobDetail.JobDataMap;
-                CountryCode = _dataMap.GetString("CODE");
-                CountryName = _dataMap.GetString("NAME");
+                JobDataMap dataMap = context.JobDetail.JobDataMap;
+
+                CountryCode = dataMap.GetString("CODE");
+                CountryName = dataMap.GetString("NAME");
+
                 RunEmailProcess();
             }
             catch (Exception ex)
             {
-                _logger.Error(ex.InnerException, $"An error occurred while Scheduling/Triggering EmailSendProcess-Excecute() : {CountryCode}");
-                await Task.CompletedTask;
-
+                _logger.Error(
+                    ex,
+                    $"An error occurred while executing EmailSendProcess - {CountryCode}");
             }
+
             await Task.CompletedTask;
         }
+
+
         public void RunEmailProcess()
         {
-            JobExecutorDAO jobDAO = new JobExecutorDAO(CountryCode);
-     
+            try
+            {
+                JobExecutorDAO jobDAO = new JobExecutorDAO(CountryCode);
+
+                // Load configuration values such as
+                // BATCH_FROMADDR and BATCH_SMTPSERVER from DB
+                JatoExecutor.Configuration config =
+                    new JatoExecutor.Configuration
+                    {
+                        ParameterList = jobDAO.LoadConfigParamFromDB()
+                    };
+
+                // Get today's VehicleExport.csv
                 string filePath = GetCsvFilePath(CountryCode);
 
-                if (File.Exists(filePath))
+                if (!File.Exists(filePath))
                 {
-                    string emailId = GetEmailId(CountryCode);
+                    _logger.Information(
+                        $"VehicleExport.csv not found for {CountryCode}. " +
+                        $"Expected path: {filePath}");
 
-                    SendEmail(emailId, filePath, CountryCode);
+                    return;
                 }
-            
-        }
 
+                // Get recipient email from JTT configuration
+                string emailId = GetEmailId(CountryCode);
 
-        private void SendEmail(string emailId, string filePath, string countryCode)
-        {
-            EmailEntities entities = new EmailEntities
+                if (string.IsNullOrWhiteSpace(emailId))
+                {
+                    _logger.Information(
+                        $"No email ID configured for {CountryCode}");
+
+                    return;
+                }
+
+                // Send email
+                SendEmail(emailId, filePath, CountryCode, config);
+            }
+            catch (Exception ex)
             {
-                ToAddress = emailId,
-                FromAddress = config.GetParamValue(BATCH_FROMADDR),
-                SmtpHost = config.GetParamValue(BATCH_SMTPSERVER),
-                Subject = countryCode + " - Vehicle Export",
-                Body = "Please find attached the Vehicle Export file.",
-                //Disclaimer = "",
-                DocumentPath = filePath,
-                IsAttachmentAvailable = true
-            };
-
-            Emailing.SendMail(entities);
+                _logger.Error(
+                    ex,
+                    $"Error occurred in RunEmailProcess for {CountryCode}");
+            }
         }
+
+
+        private void SendEmail(
+            string emailId,
+            string filePath,
+            string countryCode,
+            JatoExecutor.Configuration config)
+        {
+            try
+            {
+                EmailEntities entities = new EmailEntities
+                {
+                    ToAddress = emailId,
+
+                    FromAddress =
+                        config.GetParamValue(BATCH_FROMADDR),
+
+                    SmtpHost =
+                        config.GetParamValue(BATCH_SMTPSERVER),
+
+                    Subject =
+                        countryCode + " - Vehicle Export",
+
+                    Body =
+                        "Please find attached the Vehicle Export file.",
+
+                    DocumentPath = filePath,
+
+                    IsAttachmentAvailable = true
+                };
+
+                if (string.IsNullOrWhiteSpace(entities.ToAddress))
+                {
+                    _logger.Information(
+                        $"To address is empty for {countryCode}");
+
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(entities.FromAddress))
+                {
+                    _logger.Information(
+                        $"From address is empty for {countryCode}");
+
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(entities.SmtpHost))
+                {
+                    _logger.Information(
+                        $"SMTP server is empty for {countryCode}");
+
+                    return;
+                }
+
+                Emailing.SendMail(entities);
+
+                _logger.Information(
+                    $"Mail sent successfully to {entities.ToAddress} " +
+                    $"for {countryCode}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(
+                    ex,
+                    $"Failed while sending mail for {countryCode}");
+            }
+        }
+
+
         private string GetCsvFilePath(string countryCode)
         {
-            string batchLogPath = ConfigurationManager.AppSettings[BATCHLOGPATH].ToString();
+            string batchLogPath =
+                ConfigurationManager.AppSettings[BATCHLOGPATH];
 
-            string dateFolder = DateTime.Now.ToString("dd-MMM-yyyy");
+            if (string.IsNullOrWhiteSpace(batchLogPath))
+            {
+                batchLogPath = "BATCHLOG";
+            }
+
+            string dateFolder =
+                DateTime.Now.ToString("dd-MMM-yyyy");
 
             return Path.Combine(
                 batchLogPath,
@@ -92,11 +185,35 @@ namespace Ald.VehicleUpload.Business.BO.JobExecutor
                 "VehicleExport.csv");
         }
 
-         private string GetEmailId(string countryCode)
+
+        private string GetEmailId(string countryCode)
         {
+            /*
+             * TODO:
+             * Call P_GET_JTT_REPORT_MAILLIST through your DAO.
+             *
+             * The stored procedure returns:
+             *
+             *     EMAILIST
+             *
+             * from JTT/JTTDETAIL where
+             * JTT.JttCode = 'MAIL_REPORT_LIST'
+             * and JTTDETAIL.Active = 'Y'.
+             *
+             * Since HR and SI use different country databases,
+             * JobExecutorDAO(CountryCode) should execute the
+             * procedure against the appropriate country DB.
+             */
 
+            JobExecutorDAO jobDAO = new JobExecutorDAO(countryCode);
 
+            // Replace the following line with the DAO method
+            // you create for P_GET_JTT_REPORT_MAILLIST.
+            //
+            // Example:
+            // return jobDAO.GetJttReportMailList();
 
+            return string.Empty;
         }
     }
 }
